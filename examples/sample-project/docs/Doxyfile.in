@@ -1,0 +1,31 @@
+# Doxyfile.in — doc-toolchain example. Placeholders (${...}) are filled in-container.
+DOXYFILE_ENCODING      = UTF-8
+PROJECT_NAME           = "${PROJECT_NAME}"
+PROJECT_NUMBER         = "${PROJECT_NUMBER}"
+OUTPUT_DIRECTORY       = ${OUTPUT_DIR}
+CREATE_SUBDIRS         = NO
+OPTIMIZE_OUTPUT_FOR_C  = YES
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+JAVADOC_AUTOBRIEF      = YES
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+
+INPUT                  = ${INPUT_DIRS} ${DOCS_DIR}/pages
+FILE_PATTERNS          = *.h *.c *.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = ${DOCS_DIR}/pages/mainpage.md
+STRIP_FROM_PATH        = /project
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_LATEX         = ${GEN_LATEX}
+LATEX_OUTPUT           = latex
+LATEX_BATCHMODE        = YES
+PDF_HYPERLINKS         = YES
+USE_PDFLATEX           = YES
+
+HAVE_DOT               = ${HAVE_DOT}
+DOT_IMAGE_FORMAT       = svg

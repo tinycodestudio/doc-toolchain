@@ -1,0 +1,5 @@
+# doc-toolchain build artifacts
+_build/
+*.log
+# local example output
+examples/*/_build/
