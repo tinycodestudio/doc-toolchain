@@ -57,19 +57,41 @@ echo "entrypoint: running doxygen for '$PROJECT_NAME' (pdf=$GENERATE_PDF, dot=$H
 doxygen "$DOXYFILE"
 
 if [ "$GENERATE_PDF" = "1" ]; then
-    if [ -f "$OUTPUT_DIR/latex/Makefile" ]; then
+    if [ -f "$OUTPUT_DIR/latex/refman.tex" ]; then
         echo "entrypoint: building PDF manual via LaTeX ..."
-        # Doxygen's generated Makefile runs pdflatex to convergence and yields refman.pdf.
-        make -C "$OUTPUT_DIR/latex" >/tmp/latex.log 2>&1 || {
-            echo "entrypoint: LaTeX build FAILED — tail of log:" >&2
+        cd "$OUTPUT_DIR/latex"
+
+        # Drop any project-provided LaTeX support packages (referenced from the
+        # Doxyfile via EXTRA_PACKAGES) next to refman.tex so \usepackage finds them.
+        cp "$DOCS_DIR"/templates/*.sty . 2>/dev/null || true
+
+        # Drive the passes ourselves rather than Doxygen's generated Makefile:
+        # that Makefile aborts if pdflatex returns non-zero, which it does for
+        # benign reasons (e.g. an undefined Unicode glyph is substituted, not
+        # fatal — a valid PDF is still written). We run to cross-reference
+        # convergence tolerantly and judge success by the PDF actually existing.
+        rm -f refman.pdf
+        pdflatex -interaction=batchmode refman >/tmp/latex.log 2>&1 || true
+        makeindex refman.idx        >>/tmp/latex.log 2>&1 || true
+        pdflatex -interaction=batchmode refman >>/tmp/latex.log 2>&1 || true
+        n=3
+        while [ "$n" -gt 0 ] && grep -Eq 'Rerun (LaTeX|to get)' refman.log 2>/dev/null; do
+            pdflatex -interaction=batchmode refman >>/tmp/latex.log 2>&1 || true
+            n=$((n - 1))
+        done
+
+        if [ -f refman.pdf ]; then
+            safe_name=$(printf '%s' "$PROJECT_NAME" | tr ' /' '__')
+            cp refman.pdf "$OUTPUT_DIR/${safe_name}-manual.pdf"
+            pages=$(grep -oE 'Output written on refman\.pdf \([0-9]+ pages' refman.log | grep -oE '[0-9]+ pages' || true)
+            echo "entrypoint: PDF -> $OUTPUT_DIR/${safe_name}-manual.pdf ${pages:+($pages)}"
+        else
+            echo "entrypoint: LaTeX produced no refman.pdf — tail of log:" >&2
             tail -n 40 /tmp/latex.log >&2
             exit 3
-        }
-        safe_name=$(printf '%s' "$PROJECT_NAME" | tr ' /' '__')
-        cp "$OUTPUT_DIR/latex/refman.pdf" "$OUTPUT_DIR/${safe_name}-manual.pdf"
-        echo "entrypoint: PDF -> $OUTPUT_DIR/${safe_name}-manual.pdf"
+        fi
     else
-        echo "entrypoint: GENERATE_PDF=1 but no latex/Makefile produced — skipping PDF" >&2
+        echo "entrypoint: GENERATE_PDF=1 but no latex/refman.tex produced — skipping PDF" >&2
     fi
 fi
 

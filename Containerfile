@@ -34,6 +34,7 @@ RUN set -eux; \
             texlive \
             texmf-dist-latexextra \
             texmf-dist-latexrecommended \
+            texmf-dist-plaingeneric \
             texmf-dist-fontsrecommended; \
     fi; \
     # unprivileged build user with a home it owns
