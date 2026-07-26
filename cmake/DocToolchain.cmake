@@ -2,8 +2,8 @@
 #
 # Include this from a project's CMakeLists (typically guarded by an option) to
 # get `docs` and `docs-pdf` custom targets that shell out to build-docs.sh. The
-# heavy lifting still happens in the hardened podman container — CMake only wires
-# convenient targets.
+# heavy lifting still happens in the hardened container (podman, or docker as a
+# fallback) — CMake only wires convenient targets.
 #
 #   option(MCLI_BUILD_DOCS "Add doc targets" OFF)
 #   if(MCLI_BUILD_DOCS)
@@ -17,9 +17,11 @@ get_filename_component(_DOCTC_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(DOCTOOLCHAIN_SCRIPT "${_DOCTC_DIR}/build-docs.sh" CACHE FILEPATH
     "Path to the doc-toolchain build-docs.sh wrapper")
 
+# build-docs.sh prefers podman and falls back to docker; warn only if neither is present.
 find_program(PODMAN_EXECUTABLE podman)
-if(NOT PODMAN_EXECUTABLE)
-    message(WARNING "doc-toolchain: podman not found — 'docs' targets will fail until it is installed")
+find_program(DOCKER_EXECUTABLE docker)
+if(NOT PODMAN_EXECUTABLE AND NOT DOCKER_EXECUTABLE)
+    message(WARNING "doc-toolchain: neither podman nor docker found — 'docs' targets will fail until one is installed")
 endif()
 
 # Defaults derived from the including project.
@@ -40,11 +42,11 @@ set(_doctc_common
 add_custom_target(docs
     COMMAND ${_doctc_common} --no-pdf
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    COMMENT "Generating HTML documentation (podman + doxygen)"
+    COMMENT "Generating HTML documentation (podman/docker + doxygen)"
     USES_TERMINAL VERBATIM)
 
 add_custom_target(docs-pdf
     COMMAND ${_doctc_common} --pdf
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    COMMENT "Generating HTML + PDF documentation (podman + doxygen + LaTeX)"
+    COMMENT "Generating HTML + PDF documentation (podman/docker + doxygen + LaTeX)"
     USES_TERMINAL VERBATIM)

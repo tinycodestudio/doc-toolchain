@@ -1,4 +1,13 @@
-# doc-toolchain
+# doc-toolchain — containerized Doxygen HTML & PDF docs for C/C++
+
+> Generate Doxygen HTML documentation and a LaTeX PDF manual for any C or C++
+> project inside a minimal, security-hardened container — **no host install of
+> Doxygen, Graphviz, or LaTeX required.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Doxygen](https://img.shields.io/badge/docs-Doxygen-2C4AA8.svg)](https://www.doxygen.nl/)
+[![Container: podman](https://img.shields.io/badge/container-podman-892CA0.svg)](https://podman.io/)
+[![Rootless](https://img.shields.io/badge/rootless-yes-brightgreen.svg)](#image-minimal--hardened)
 
 A **self-standing, containerized documentation tool** built on
 [Doxygen](https://www.doxygen.nl/). It turns a source tree + a `Doxyfile.in`
@@ -6,13 +15,22 @@ template + Markdown pages into browsable **HTML** and an optional **PDF manual**
 without installing Doxygen, Graphviz, or LaTeX on the host. Everything runs inside
 a minimal, security-hardened [podman](https://podman.io/) container.
 
+**Why doc-toolchain?** Reproducible, one-command API docs for C/C++ with zero
+toolchain drift — vendor it once as a git submodule and every contributor and CI
+runner builds identical HTML and PDF output from the same pinned container image.
+
 It is designed to be vendored into a project as a **git submodule** (e.g. at
 `docs/doc-toolchain`), reading that project's documentation content from a `docs/`
 folder. It works for any C/C++ project, not just the one it ships with.
 
 ## Requirements
 
-- `podman` (rootless is fine). Nothing else — no host Doxygen/LaTeX.
+- A container engine: **`podman`** (rootless is fine, preferred) — or **`docker`**
+  as an automatic fallback if podman isn't installed. Nothing else on the host —
+  no Doxygen, Graphviz, or LaTeX.
+
+  The engine is autodetected (podman first, then docker). Force one with
+  `--engine docker` / `--engine podman`, or the `CONTAINER_ENGINE` env var.
 
 ## Quick start
 
@@ -69,7 +87,7 @@ build-docs.sh --init-templates      # writes into docs/templates/
 - `--read-only` root filesystem; only the output bind-mount and a `/tmp` tmpfs are writable.
 - `--network=none` — rendering needs no network.
 - `--cap-drop=ALL` and `--security-opt=no-new-privileges`.
-- `--user $(id -u):$(id -g)` + `--userns=keep-id` so output files are owned by you.
+- `--user $(id -u):$(id -g)` (plus `--userns=keep-id` on podman) so output files are owned by you.
 - `--memory` / `--pids-limit` caps. Source tree mounted read-only.
 
 ## Using as a submodule
@@ -98,3 +116,14 @@ endif()
 If your host enforces SELinux, append `,Z` to the volume mounts in `build-docs.sh`
 (`-v "$PROJECT_ROOT:/project:ro,Z"`). It is omitted by default because relabeling
 is unnecessary — and can be surprising — on non-SELinux hosts.
+
+## License
+
+Released under the [MIT License](LICENSE). © 2026 tinycodestudio.
+
+---
+
+<sub>**Keywords:** Doxygen · containerized documentation · C/C++ API docs
+generator · Doxygen PDF · Doxygen HTML · podman · rootless container ·
+Graphviz · LaTeX manual · doc automation · git submodule docs · CMake docs ·
+reproducible documentation build · security-hardened container · Alpine Linux.</sub>

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# build-docs.sh — generate project documentation in a hardened podman container.
+# build-docs.sh — generate project documentation in a hardened container.
 #
-# Self-standing: needs only podman on the host. Doxygen, Graphviz and LaTeX all
-# live in the container image, which is built on first use.
+# Self-standing: needs only a container engine on the host — podman (preferred)
+# or docker as a fallback. Doxygen, Graphviz and LaTeX all live in the container
+# image, which is built on first use. Override detection with --engine or the
+# CONTAINER_ENGINE environment variable.
 #
 # Typical use (from a project that vendors this as docs/doc-toolchain):
 #   docs/doc-toolchain/build-docs.sh                 # HTML + PDF for the parent project
@@ -26,6 +28,7 @@ SOURCE_DIRS="include src"
 OUTPUT_DIR=""              # default: $DOCS_DIR/_build
 PROJECT_NAME=""            # default: basename of PROJECT_ROOT
 PROJECT_NUMBER=""
+ENGINE="${CONTAINER_ENGINE:-}"   # container engine; empty = autodetect (podman, then docker)
 GENERATE_PDF=1
 IMAGE=""                   # default: computed from PDF toggle
 REBUILD_IMAGE=0
@@ -44,6 +47,7 @@ Options:
   --project-number VER  Doxygen PROJECT_NUMBER / version string
   --pdf | --no-pdf      Build (or skip) the LaTeX PDF manual (default: --pdf)
   --image NAME[:TAG]    Container image tag to build/use (default: doc-toolchain:pdf|html)
+  --engine NAME         Container engine: podman or docker (default: autodetect, podman first)
   --rebuild-image       Force a fresh image build
   --init-templates      Regenerate version-matched HTML templates into DOCS_DIR/templates
   -h, --help            This help
@@ -63,6 +67,7 @@ while [ $# -gt 0 ]; do
         --no-pdf)         GENERATE_PDF=0; shift ;;
         --html)           shift ;;              # HTML is always produced; accepted for clarity
         --image)          IMAGE="$2"; shift 2 ;;
+        --engine)         ENGINE="$2"; shift 2 ;;
         --rebuild-image)  REBUILD_IMAGE=1; shift ;;
         --init-templates) INIT_TEMPLATES=1; shift ;;
         -h|--help)        usage; exit 0 ;;
@@ -70,7 +75,27 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-command -v podman >/dev/null 2>&1 || { echo "build-docs: podman is required but not found" >&2; exit 1; }
+# ── Select container engine (podman preferred, docker fallback) ──────────────
+if [ -n "$ENGINE" ]; then
+    case "$ENGINE" in podman|docker) : ;; *) echo "build-docs: --engine must be 'podman' or 'docker', got '$ENGINE'" >&2; exit 2 ;; esac
+    command -v "$ENGINE" >/dev/null 2>&1 || { echo "build-docs: requested engine '$ENGINE' not found on PATH" >&2; exit 1; }
+elif command -v podman >/dev/null 2>&1; then
+    ENGINE=podman
+elif command -v docker >/dev/null 2>&1; then
+    ENGINE=docker
+    echo "build-docs: podman not found, falling back to docker" >&2
+else
+    echo "build-docs: no container engine found — install podman (preferred) or docker" >&2
+    exit 1
+fi
+
+image_exists() {
+    if [ "$ENGINE" = podman ]; then
+        podman image exists "$1"
+    else
+        docker image inspect "$1" >/dev/null 2>&1
+    fi
+}
 
 # ── Resolve defaults that depend on other args ───────────────────────────────
 [ -n "$DOCS_DIR" ]      || DOCS_DIR="$PROJECT_ROOT/docs"
@@ -97,9 +122,9 @@ for d in $SOURCE_DIRS; do C_INPUT_DIRS="$C_INPUT_DIRS /project/$d"; done
 C_INPUT_DIRS="$(echo "$C_INPUT_DIRS" | sed 's/^ *//')"
 
 # ── Build the image if needed ────────────────────────────────────────────────
-if [ "$REBUILD_IMAGE" = "1" ] || ! podman image exists "$IMAGE"; then
-    echo ">> building image $IMAGE (WITH_PDF=$GENERATE_PDF) ..."
-    podman build --build-arg "WITH_PDF=$GENERATE_PDF" -t "$IMAGE" -f "$SCRIPT_DIR/Containerfile" "$SCRIPT_DIR"
+if [ "$REBUILD_IMAGE" = "1" ] || ! image_exists "$IMAGE"; then
+    echo ">> building image $IMAGE with $ENGINE (WITH_PDF=$GENERATE_PDF) ..."
+    "$ENGINE" build --build-arg "WITH_PDF=$GENERATE_PDF" -t "$IMAGE" -f "$SCRIPT_DIR/Containerfile" "$SCRIPT_DIR"
 fi
 
 mkdir -p "$OUTPUT_DIR"
@@ -116,14 +141,16 @@ HARDENING=(
     --network=none
     --tmpfs "/tmp:rw,exec,size=512m"
     --user "$(id -u):$(id -g)"
-    --userns=keep-id
     --memory=2g
     --pids-limit=512
 )
+# --userns=keep-id is podman-only; with rootful docker, --user already makes the
+# process run as the invoking uid so bind-mounted output is owned by you.
+[ "$ENGINE" = podman ] && HARDENING+=(--userns=keep-id)
 
 run_container() {
     local mode="$1" out="$2"
-    podman run "${HARDENING[@]}" \
+    "$ENGINE" run "${HARDENING[@]}" \
         -e "PROJECT_NAME=$PROJECT_NAME" \
         -e "PROJECT_NUMBER=$PROJECT_NUMBER" \
         -e "INPUT_DIRS=$C_INPUT_DIRS" \
